@@ -154,7 +154,8 @@ def convert_issues(source, dest, dest_project_id, only_issues=None):
         src_ticket_resolution = src_ticket_data['resolution']
         # src_ticket_severity = src_ticket_data['severity']
         src_ticket_status = src_ticket_data['status']
-        src_ticket_component = src_ticket_data.get('component', '')
+        src_ticket_component = src_ticket_data['component']
+        src_ticket_version = src_ticket_data['version']
 
         new_labels = []
         if src_ticket_priority == 'high':
@@ -177,6 +178,12 @@ def convert_issues(source, dest, dest_project_id, only_issues=None):
             new_labels.append('duplicate')
         elif src_ticket_resolution == 'worksforme':
             new_labels.append('works for me')
+
+        if src_ticket_version:
+            if src_ticket_version == 'trunk' or src_ticket_version == 'dev':
+                pass
+            else:
+                new_labels.append('release-%s' % src_ticket_version)
 
         # if src_ticket_severity == 'high':
         #     new_labels.append('critical')
@@ -203,8 +210,14 @@ def convert_issues(source, dest, dest_project_id, only_issues=None):
             new_state = 'reopened'
         elif src_ticket_status == 'closed':
             new_state = 'closed'
+        elif src_ticket_status == 'accepted':
+            new_labels.append(src_ticket_status)
+        elif src_ticket_status == 'reviewing' or src_ticket_status == 'testing':
+            new_labels.append(src_ticket_status)
         else:
             print("!!! unknown ticket status: %s" % src_ticket_status)
+
+        print "migrated ticket %s with labels %s" % (src_ticket_id, new_labels)
 
         # Minimal parameters
         new_issue = Issues(
