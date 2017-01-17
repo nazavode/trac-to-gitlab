@@ -7,14 +7,9 @@ Copyright © 2013
 See license information at the bottom of this file
 '''
 
-import re
-import os
 import ConfigParser
 import ast
-from datetime import datetime
-from re import MULTILINE
 import xmlrpclib
-import trac2down
 import sys
 
 """
@@ -64,13 +59,15 @@ ticket_owners = set()
 ticket_reporters = set()
 ticket_message_posters = set()
 
-if (method == 'api'):
-    from gitlab_api import Connection, Issues, Notes, Milestones
+if method == 'api':
+    from gitlab_api import Connection
+
     gitlab_url = config.get('target', 'url')
     gitlab_access_token = config.get('target', 'access_token')
     dest_ssl_verify = config.getboolean('target', 'ssl_verify')
-elif (method == 'direct'):
-    from gitlab_direct import Connection, Issues, Notes, Milestones
+elif method == 'direct':
+    from gitlab_direct import Connection
+
     db_name = config.get('target', 'db-name')
     db_password = config.get('target', 'db-password')
     db_user = config.get('target', 'db-user')
@@ -101,10 +98,10 @@ def collect_users(source):
             for change in changelog:
                 change_type = change[2]
                 if (change_type == "comment") and change[4] != '':
-                    print "ticket message poster: ", change[1]
+                    print("ticket message poster: %s" % change[1])
                     ticket_message_posters.add(change[1])
         except Exception as e:
-            print "unable to parse change log for ticket id ", src_ticket_id
+            print("unable to parse change log for ticket id %s" % src_ticket_id)
             print >> sys.stderr, "ticket: ", src_ticket_id, e
 
         ticket_index += 1
