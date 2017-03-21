@@ -125,7 +125,7 @@ def convert_issues(source, dest, dest_project_id, only_issues=None):
     milestone_map_id = {}
     for milestone_name in source.ticket.milestone.getAll():
         milestone = source.ticket.milestone.get(milestone_name)
-        print(milestone)
+        print("migrated milestone: %s" % milestone.name)
         new_milestone = Milestones(
             description=trac2down.convert(fix_wiki_syntax(milestone['description']), '/milestones/', False),
             title=milestone['name'],
