@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python fileencoding=utf-8
 '''
 Copyright © 2013 - 2014
@@ -6,13 +8,14 @@ Copyright © 2013 - 2014
 See license information at the bottom of this file
 '''
 
-
-from peewee import PostgresqlDatabase
-from .model900 import *
 import os
 import shutil
+import importlib
 from datetime import datetime
-from io import open
+
+import peewee
+
+__all__ = ['Connection']
 
 
 class Connection(object):
@@ -20,11 +23,11 @@ class Connection(object):
     Connection to the gitlab database
     """
 
-    def __init__(self, db_name, db_user, db_password, db_path, uploads_path, project_name):
-        """
-        """
-        # db = PostgresqlDatabase(db_name, user=db_user, host=db_path)
-        # database_proxy.initialize(db)
+    def __init__(self, model, db_name, db_user, db_password, db_path, uploads_path, project_name):
+        self.model = importlib.import_module(model)
+        self.model.database_proxy.initialize(
+            peewee.PostgresqlDatabase(db_name, user=db_user, host=db_path)
+        )
         self.uploads_path = uploads_path
         self.project_name = project_name
 
