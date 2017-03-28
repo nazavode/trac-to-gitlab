@@ -92,7 +92,8 @@ matcher_changeset2 = re.compile(pattern_changeset2)
 
 
 def convert_xmlrpc_datetime(dt):
-    return datetime.strptime(str(dt), "%Y%m%dT%H:%M:%S")
+    # 2011-04-07 14:15:23
+    return datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
 
 
 def format_changeset_comment(m):
@@ -324,7 +325,12 @@ if __name__ == "__main__":
     elif method == 'direct':
         dest = Connection(db_name, db_user, db_password, db_path, uploads_path, dest_project_name)
 
-    source = xmlrpclib.ServerProxy(trac_url)
+    # source = xmlrpclib.ServerProxy(trac_url)
+
+    import ssl
+    source = xmlrpclib.ServerProxy(trac_url, encoding = 'UTF-8', verbose=False, use_datetime=True, context = ssl._create_unverified_context())
+
+
     dest_project_id = get_dest_project_id(dest, dest_project_name)
 
     if must_convert_issues:

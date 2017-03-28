@@ -8,7 +8,7 @@ See license information at the bottom of this file
 
 
 from peewee import PostgresqlDatabase
-from .model817 import *
+from .model900 import *
 import os
 import shutil
 from datetime import datetime
@@ -23,8 +23,8 @@ class Connection(object):
     def __init__(self, db_name, db_user, db_password, db_path, uploads_path, project_name):
         """
         """
-        db = PostgresqlDatabase(db_name, user=db_user, host=db_path)
-        database_proxy.initialize(db)
+        # db = PostgresqlDatabase(db_name, user=db_user, host=db_path)
+        # database_proxy.initialize(db)
         self.uploads_path = uploads_path
         self.project_name = project_name
 
