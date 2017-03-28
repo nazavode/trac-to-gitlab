@@ -68,10 +68,11 @@ def convert(text, base_path, multilines=True):
 
 
 def save_file(text, name, version, date, author, directory):
+    import codecs
     folders = name.rsplit("/", 1)
     if not os.path.exists("%s%s" % (directory, folders[0])):
         os.makedirs("%s%s" % (directory, folders[0]))
-    fp = open('%s%s.md' % (directory, name), 'w')
+    fp = codecs.open('%s%s.md' % (directory, name), 'w', encoding='utf-8')
     # print >>fp, '<!-- Name: %s -->' % name
     # print >>fp, '<!-- Version: %d -->' % version
     # print >>fp, '<!-- Last-Modified: %s -->' % date
