@@ -30,8 +30,14 @@ def _authors_collect(wiki=None, tickets=None):
     ))
 
 
+def ticket_get_attributes(source, ticket_id):
+    LOG.debug('ticket_get_attributes of ticket #%s', ticket_id)
+    ticket = source.ticket.get(ticket_id)
+    return ticket[3]
+
+
 def ticket_get_changelog(source, ticket_id):
-    LOG.debug('ticket_get_changelog of ticket %s', ticket_id)
+    LOG.debug('ticket_get_changelog of ticket #%s', ticket_id)
     return [
         {
             'time': c[0],
@@ -46,7 +52,7 @@ def ticket_get_changelog(source, ticket_id):
 
 
 def ticket_get_attachments(source, ticket_id):
-    LOG.debug('ticket_get_attachments of ticket %s', ticket_id)
+    LOG.debug('ticket_get_attachments of ticket #%s', ticket_id)
     return {
         meta[0]: {
             'attributes': {
@@ -66,12 +72,11 @@ def ticket_get_all(source, attachments=True):
     LOG.debug('ticket_get_all')
     return {
         ticket_id: {
-            'attributes': attrs,
+            'attributes': ticket_get_attributes(source, ticket_id),
             'changelog': ticket_get_changelog(source, ticket_id),
             'attachments': ticket_get_attachments(source, ticket_id) if attachments else {},
         }
-        for ticket_id in source.ticket.query("max=0")
-            for attrs in source.ticket.get(ticket_id)
+        for ticket_id in source.ticket.query("max=0&order=id")
     }
 
 
