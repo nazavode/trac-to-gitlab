@@ -164,7 +164,7 @@ def get_connect_kwargs(options):
     return kwargs
 
 
-if __name__ == '__main__':
+def main():
     raw_argv = sys.argv
 
     parser = get_option_parser()
