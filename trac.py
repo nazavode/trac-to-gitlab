@@ -92,14 +92,26 @@ def project_get(source, collect_authors=True):
         'milestones': milestone_get_all(source),
     }
     if collect_authors:
-        project['authors'] = list(set(
-            [page['attributes']['author'] for page in six.itervalues(project['wiki'])] + \
-            [ticket['attributes']['reporter'] for ticket in six.itervalues(project['tickets'])] + \
-            [ticket['attributes']['owner'] for ticket in six.itervalues(project['tickets'])] + \
-            [change['author'] for ticket in six.itervalues(project['tickets']) for change in ticket['changelog']]
-            # TODO crawl wiki attachments for additional authors
-        ))
+        project['authors'] = _authors_collect(wiki=project['wiki'], tickets=project['tickets'])
     return project
+
+
+def authors_get(source, from_wiki=True, from_tickets=True):
+    wiki = wiki_get_all_pages(source) if from_wiki else None
+    tickets = ticket_get_all(source) if from_tickets else None
+    return _authors_collect(wiki=wiki, tickets=tickets)
+
+
+def _authors_collect(wiki=None, tickets=None):
+    wiki = wiki or []
+    tickets = tickets or []
+    return list(set(
+        [page['attributes']['author'] for page in six.itervalues(wiki)] + \
+        [ticket['attributes']['reporter'] for ticket in six.itervalues(tickets)] + \
+        [ticket['attributes']['owner'] for ticket in six.itervalues(tickets)] + \
+        [change['author'] for ticket in six.itervalues(tickets) for change in ticket['changelog']]
+        # TODO crawl wiki attachments for additional authors
+    ))
 
 
 def connect(url, encoding='UTF-8', use_datetime=True, ssl_verify=True):
