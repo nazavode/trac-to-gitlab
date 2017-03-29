@@ -10,7 +10,7 @@ from __future__ import division
 import datetime
 import re
 import os
-from io import open
+import codecs
 
 
 def convert(text, base_path, multilines=True):
@@ -68,7 +68,6 @@ def convert(text, base_path, multilines=True):
 
 
 def save_file(text, name, version, date, author, directory):
-    import codecs
     folders = name.rsplit("/", 1)
     if not os.path.exists("%s%s" % (directory, folders[0])):
         os.makedirs("%s%s" % (directory, folders[0]))
