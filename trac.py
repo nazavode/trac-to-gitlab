@@ -2,26 +2,56 @@
 
 import ssl
 
+import six
 from six.moves import xmlrpc_client as xmlrpc
 
 
 def ticket_get_changelog(ticket_id, source):
-    changelog = list(source.ticket.changeLog(ticket_id))
-    # TODO attachments
-    return changelog
+    return [
+        {
+            'time': c[0],
+            'author': c[1],
+            'field': c[2],
+            'oldvalue': c[3],
+            'newvalue': c[4],
+            'permanent': bool(c[5])
+        }
+        for c in source.ticket.changeLog(ticket_id)
+    ]
+
+
+def ticket_get_attachments(ticket_id, source):
+    return {
+        meta[0]: {
+            'attributes': {
+                'filename': meta[0],
+                'description': meta[1],
+                'size': meta[2],
+                'time': meta[3],
+                'author': meta[4],
+            },
+            'data': six.u(source.ticket.getAttachment(ticket_id, meta[0]).data.decode('base64'))
+        }
+        for meta in source.ticket.listAttachments(ticket_id)
+    }
 
 
 def ticket_get_all(source):
-    tickets = {
-        id: ticket
-        for id, created, updated, ticket in source.ticket.getAll()
+    return {
+        tid: {
+            'attributes': attrs,
+            'changelog': ticket_get_changelog(tid, source),
+            'attachments': ticket_get_attachments(tid, source),
+        }
+        for tid in source.ticket.query("max=0")
+            for attrs in source.ticket.get(tid)
     }
 
 
 def milestone_get_all(source):
     return {
         milestone: source.ticket.milestone.get(milestone)
-        for milestone in milestone_get_all_names(source)
+            for milestone in milestone_get_all_names(source)
     }
 
 
@@ -33,37 +63,45 @@ def milestone_get_all_names(source):
     return list(source.ticket.milestone.getAll())
 
 
-def wiki_get_all_pages(source):
-    return {
-        pagename: wiki_get_page(pagename, source)
-        for pagename in wiki_get_all_page_names(source)
+def wiki_get_all_pages(source, exclude_authors=None, exclude_trac_pages=True):
+    exclude_authors = set(exclude_authors or [])
+    if exclude_trac_pages:
+        exclude_authors.add('trac')
+    pages = {
+        name: {'attributes': source.wiki.getPageInfo(name)}
+            for name in source.wiki.getAllPages()
     }
+    if exclude_authors:
+        pages = {
+            k: v for k, v in six.iteritems(pages)
+                if v['attributes']['author'] not in exclude_authors
+        }
+    for pagename, pagedict in six.iteritems(pages):
+        pagedict['page'] = source.wiki.getPage(pagename)
+        pagedict['attachments'] = {
+            filename: six.u(source.wiki.getAttachment(filename).data.decode('base64'))
+                for filename in source.wiki.listAttachments(pagename)
+        }
+    return pages
 
 
-def wiki_get_page(pagename, source):
-    info = source.wiki.getPageInfo(pagename)
-    page = source.wiki.getPage(pagename)
-    attachments = {
-        filename: source.wiki.getAttachment(filename).data
-            for filename in source.wiki.listAttachments(pagename)
-    }
-    return {'info': info, 'page': page, 'attachments': attachments}
-
-
-def wiki_get_all_page_names(source):
-    return list(source.wiki.getAllPages())
-
-
-def project_get(source):
-    return {
+def project_get(source, collect_authors=True):
+    project = {
         'wiki': wiki_get_all_pages(source),
         'tickets': ticket_get_all(source),
         'milestones': milestone_get_all(source),
     }
+    if collect_authors:
+        project['authors'] = list(set(
+            [page['attributes']['author'] for page in six.itervalues(project['wiki'])] + \
+            [ticket['attributes']['reporter'] for ticket in six.itervalues(project['tickets'])] + \
+            [ticket['attributes']['owner'] for ticket in six.itervalues(project['tickets'])] + \
+            [change['author'] for ticket in six.itervalues(project['tickets']) for change in ticket['changelog']]
+            # TODO crawl wiki attachments for additional authors
+        ))
+    return project
 
 
 def connect(url, encoding='UTF-8', use_datetime=True, ssl_verify=True):
     context = None if ssl_verify else ssl._create_unverified_context()
-    return xmlrpc.MultiCall(
-        xmlrpc.ServerProxy(url, encoding=encoding, use_datetime=use_datetime, context=context)
-    )
+    return xmlrpc.ServerProxy(url, encoding=encoding, use_datetime=use_datetime, context=context)
