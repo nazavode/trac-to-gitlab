@@ -28,10 +28,10 @@ TICKET_STATE_TO_ISSUE_STATE = {
 ################################################################################
 
 _pattern_changeset = r'(?sm)In \[changeset:"([^"/]+?)(?:/[^"]+)?"\]:\n\{\{\{(\n#![^\n]+)?\n(.*?)\n\}\}\}'
-_matcher_changeset = re.compile(pattern_changeset)
+_matcher_changeset = re.compile(_pattern_changeset)
 
 _pattern_changeset2 = r'\[changeset:([a-zA-Z0-9]+)\]'
-_matcher_changeset2 = re.compile(pattern_changeset2)
+_matcher_changeset2 = re.compile(_pattern_changeset2)
 
 
 def _format_changeset_comment(m):

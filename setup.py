@@ -35,7 +35,12 @@ setup(
     author="Federico Ficarelli",
     author_email="federico.ficarelli@gmail.com",
     packages=find_packages(),
-    install_requires=['peewee', 'psycopg2', 'six', 'click'],
+    install_requires=[
+        'peewee',
+        'psycopg2',
+        'six',
+        'click'
+    ],
     entry_points={
         'console_scripts': [
             'trac2gitlab=trac2gitlab.cli:main',

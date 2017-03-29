@@ -62,15 +62,22 @@ CONTEXT_SETTINGS = {
     help='Configuration file.'
 )
 @click.option(
-    '--ssl-verify/--no-ssl-verify',
-    default=True,
-    help='Enable/disable SSL certificate verification.'
+    '--no-ssl-verify',
+    is_flag=True,
+    default=False,
+    help='Disable SSL certificate verification.'
 )
 @click.option(
     '--verbose',
     is_flag=True,
     default=False,
     help='Run in verbose mode.'
+)
+@click.option(
+    '--debug',
+    is_flag=True,
+    default=False,
+    help='Run in debug mode.'
 )
 @click.version_option('0.0.1')
 @click.pass_context
