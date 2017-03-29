@@ -10,12 +10,13 @@ from six.moves import xmlrpc_client as xmlrpc
 LOG = logging.getLogger(__name__)
 
 
-def _safe_encode(data, encoding='base64'):
+def _safe_retrieve_data(data, encoding='base64'):
     try:
-        six.u(data.decode(encoding))
+        # six.b(data.decode(encoding))
+        return six.b(data)
     except Exception as e:
         LOG.exception('error while decoding data from %s', encoding)
-        return six.u(str(e))
+        return str(e)
 
 
 def _authors_collect(wiki=None, tickets=None):
@@ -26,11 +27,10 @@ def _authors_collect(wiki=None, tickets=None):
         [ticket['attributes']['reporter'] for ticket in six.itervalues(tickets)] + \
         [ticket['attributes']['owner'] for ticket in six.itervalues(tickets)] + \
         [change['author'] for ticket in six.itervalues(tickets) for change in ticket['changelog']]
-        # TODO crawl wiki attachments for additional authors
     ))
 
 
-def ticket_get_changelog(ticket_id, source):
+def ticket_get_changelog(source, ticket_id):
     LOG.debug('ticket_get_changelog of ticket %s', ticket_id)
     return [
         {
@@ -45,7 +45,7 @@ def ticket_get_changelog(ticket_id, source):
     ]
 
 
-def ticket_get_attachments(ticket_id, source):
+def ticket_get_attachments(source, ticket_id):
     LOG.debug('ticket_get_attachments of ticket %s', ticket_id)
     return {
         meta[0]: {
@@ -56,22 +56,22 @@ def ticket_get_attachments(ticket_id, source):
                 'time': meta[3],
                 'author': meta[4],
             },
-            'data': _safe_encode(source.ticket.getAttachment(ticket_id, meta[0]).data)
+            'data': _safe_retrieve_data(source.ticket.getAttachment(ticket_id, meta[0]).data)
         }
         for meta in source.ticket.listAttachments(ticket_id)
     }
 
 
-def ticket_get_all(source):
+def ticket_get_all(source, attachments=True):
     LOG.debug('ticket_get_all')
     return {
-        tid: {
+        ticket_id: {
             'attributes': attrs,
-            'changelog': ticket_get_changelog(tid, source),
-            'attachments': ticket_get_attachments(tid, source),
+            'changelog': ticket_get_changelog(source, ticket_id),
+            'attachments': ticket_get_attachments(source, ticket_id) if attachments else {},
         }
-        for tid in source.ticket.query("max=0")
-            for attrs in source.ticket.get(tid)
+        for ticket_id in source.ticket.query("max=0")
+            for attrs in source.ticket.get(ticket_id)
     }
 
 
@@ -83,7 +83,7 @@ def milestone_get_all(source):
     }
 
 
-def milestone_get(milestone_name, source):
+def milestone_get(source, milestone_name):
     LOG.debug('milestone_get of milestone %s', milestone_name)
     return source.ticket.milestone.get(milestone_name)
 
@@ -93,30 +93,37 @@ def milestone_get_all_names(source):
     return list(source.ticket.milestone.getAll())
 
 
-def wiki_get_all_pages(source, exclude_authors=None, exclude_trac_pages=True):
+def wiki_get_all_pages(source, authors_blacklist=None, contents=True, attachments=True, exclude_system_pages=True):
     LOG.debug('wiki_get_all_pages')
-    exclude_authors = set(exclude_authors or [])
-    if exclude_trac_pages:
-        exclude_authors.add('trac')
+    authors_blacklist = set(authors_blacklist or [])
+    if exclude_system_pages:
+        authors_blacklist.add('trac')
     LOG.debug('wiki_get_all_pages is retrieving metadata for all pages')
     pages = {
-        name: {'attributes': source.wiki.getPageInfo(name)}
-            for name in source.wiki.getAllPages()
+        name: {
+            'attributes': source.wiki.getPageInfo(name),
+            'page': '',
+            'attachments': {},
+        }
+        for name in source.wiki.getAllPages()
     }
-    if exclude_authors:
-        LOG.debug('wiki_get_all_pages is excluding authors: %s', exclude_authors)
+    if authors_blacklist:
+        LOG.debug('wiki_get_all_pages is blacklisting authors: %s', authors_blacklist)
         pages = {
             k: v for k, v in six.iteritems(pages)
-                if v['attributes']['author'] not in exclude_authors
+                if v['attributes']['author'] not in authors_blacklist
         }
-    for pagename, pagedict in six.iteritems(pages):
-        LOG.debug('wiki_get_all_pages is retrieving contents for wiki page %s', pagename)
-        pagedict['page'] = source.wiki.getPage(pagename)
-        LOG.debug('wiki_get_all_pages is retrieving attachments for wiki page %s', pagename)
-        pagedict['attachments'] = {
-            filename: _safe_encode(source.wiki.getAttachment(filename).data)
-                for filename in source.wiki.listAttachments(pagename)
-        }
+    if contents:
+        for pagename, pagedict in six.iteritems(pages):
+            LOG.debug('wiki_get_all_pages is retrieving contents for wiki page %s', pagename)
+            pagedict['page'] = source.wiki.getPage(pagename)
+    if attachments:
+        for pagename, pagedict in six.iteritems(pages):
+            LOG.debug('wiki_get_all_pages is retrieving attachments for wiki page %s', pagename)
+            pagedict['attachments'] = {
+                filename: _safe_retrieve_data(source.wiki.getAttachment(filename).data)
+                    for filename in source.wiki.listAttachments(pagename)
+            }
     return pages
 
 
@@ -126,6 +133,7 @@ def project_get(source, collect_authors=True):
         'wiki': wiki_get_all_pages(source),
         'tickets': ticket_get_all(source),
         'milestones': milestone_get_all(source),
+        'authors': [],
     }
     if collect_authors:
         LOG.debug('project_get is collecting authors from project')
@@ -134,8 +142,8 @@ def project_get(source, collect_authors=True):
 
 
 def authors_get(source, from_wiki=True, from_tickets=True):
-    wiki = wiki_get_all_pages(source) if from_wiki else None
-    tickets = ticket_get_all(source) if from_tickets else None
+    wiki = wiki_get_all_pages(source, contents=False, attachments=False) if from_wiki else None
+    tickets = ticket_get_all(source, attachments=False) if from_tickets else None
     return _authors_collect(wiki=wiki, tickets=tickets)
 
 
