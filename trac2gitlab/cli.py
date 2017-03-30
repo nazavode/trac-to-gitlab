@@ -7,6 +7,7 @@ from collections import defaultdict
 from pprint import pformat
 from six.moves.urllib import parse as urllib
 
+import six
 import click
 import click_spinner
 import toml
@@ -124,7 +125,7 @@ def gitlab_params(func):
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.option(
-    '--config',
+    '--config-file',
     metavar='<path>',
     type=click.Path(exists=True, readable=True),
     help='Configuration file to be read for options (in toml format). '
@@ -137,11 +138,11 @@ def gitlab_params(func):
 )
 @click.version_option('0.0.1')
 @click.pass_context
-def cli(ctx, config, verbose):
+def cli(ctx, config_file, verbose):
     """Toolbox for Trac to GitLab migrations."""
     # Read config file and update context_map
-    if config:
-        conf = toml.load(config)
+    if config_file:
+        conf = toml.load(config_file)
         ctx.default_map.update(
             {k: conf for k in ['users', 'migrate', 'model', 'export']})
     # Convert verbosity to logging levels
@@ -154,6 +155,7 @@ def cli(ctx, config, verbose):
     logging.basicConfig(level=level)
     # Pass configuration to subcommands
     ctx.obj['verbose'] = verbose
+    ctx.obj['config-file'] = config_file
 
 ################################################################################
 # subcommands
@@ -195,14 +197,41 @@ def export(ctx, trac_uri, ssl_verify, format):
 
 
 @cli.command()
+@click.option(
+    '-u', '--usermap',
+    type=(six.u, six.u),
+    multiple=True,
+    help='Mapping from a Trac username to a GitLab username',
+)
+@click.option(
+    '--usermap-file',
+    metavar='<path>...',
+    type=click.Path(exists=True, readable=True),
+    multiple=True,
+    help='Additional file to be read for user mappings ([usermap] section in toml format)',
+)
+@click.option(
+    '--fallback-user',
+    metavar='<str>',
+    default='migration-bot',
+    show_default=True,
+    help='Default GitLab username to be used when a Trac user has no match in the user map',
+)
 @trac_params
 @gitlab_params
 @click.confirmation_option(prompt='Are you sure you want to proceed with the migration?')
 @click.pass_context
-def migrate(ctx, trac_uri, ssl_verify, gitlab_db_user, gitlab_db_password,
-              gitlab_db_name, gitlab_db_path, gitlab_db_uploads, gitlab_version):
+def migrate(ctx, usermap, usermap_file, fallback_user, trac_uri, ssl_verify,
+              gitlab_db_user, gitlab_db_password, gitlab_db_name, gitlab_db_path,
+              gitlab_db_uploads, gitlab_version):
     '''migrate a Trac instance'''
-    pass
+    umap = {}
+    config_file = ctx.obj.get('config-file', None)
+    if config_file in ctx.obj:
+        umap.update(toml.load(config_file)['usermap'])
+    for mapfile in usermap_file:
+        umap.update(toml.load(mapfile)['usermap'])
+    umap.update({m[0]: m[1] for m in usermap})
 
 
 @cli.command()
