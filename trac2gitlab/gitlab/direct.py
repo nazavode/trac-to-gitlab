@@ -70,6 +70,9 @@ class Connection(object):
             return project._data
         return None
     
+    def project_id(self):
+        return self.project_id_by_name(self.project_name)
+    
     def project_id_by_name(self, project_name):
         project = self.project_by_name(project_name)
         if not project:

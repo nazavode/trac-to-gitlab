@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import re
+import logging
+from collections import defaultdict
 
 import six
 
 from trac2gitlab import trac2down
+
+LOG = logging.getLogger(__name__)
+
 
 TICKET_PRIORITY_TO_ISSUE_LABEL = {
     'high': 'prio:high',
@@ -102,6 +107,18 @@ def ticket_state(ticket, issue, state_to_state=TICKET_STATE_TO_ISSUE_STATE):
 #  dbmodel.Milestone(**milestone_kwargs(trac_milestone))
 ################################################################################
 
+def change_kwargs(change):
+    return {
+        'note': _wikiconvert(change['newvalue'], '/issues/', multiline=False),
+        'created_at': change['time'],
+        'updated_at': change['time'],
+        # References:
+        'author': change['author'],
+        'updated_by': change['author'],
+        # 'project'
+    }
+
+
 def ticket_kwargs(ticket):
     priority_labels = ticket_priority(ticket)
     resolution_labels = ticket_resolution(ticket)
@@ -118,13 +135,14 @@ def ticket_kwargs(ticket):
         'description': _wikiconvert(ticket['attributes']['description'], '/issues/', multiline=False),
         'state': state,
         'labels': ','.join(labels),
-        'assignee': ticket['attributes']['owner'],
         'created_at': ticket['attributes']['time'],
         'updated_at': ticket['attributes']['changetime'],
-        # 'project': None,
+        # References:
+        'assignee': ticket['attributes']['owner'],
         'author': ticket['attributes']['reporter'],
-        # 'iid': None,
         'milestone': ticket['attributes']['milestone'],
+        # 'project': None,
+        # 'iid': None,
     }
 
 
@@ -134,6 +152,8 @@ def milestone_kwargs(milestone):
         'title': milestone['name'],
         'state': 'closed' if milestone['completed'] else 'active',
         'due_date': milestone['due'],
+        # References:
+        # 'project': None,
     }
 
 
@@ -141,8 +161,43 @@ def milestone_kwargs(milestone):
 # Conversion API
 ################################################################################
 
-def migrate_wiki(tracwiki, gitlab, output_dir):
-    for title, wiki in six.iteritems(tracwiki):
+def migrate_tickets(trac_tickets, gitlab, default_user, usermap=None):
+    for ticket_id, ticket in six.iteritems(trac_tickets):
+        issue_args = ticket_kwargs(ticket)
+        # Fix references
+        issue_args['project'] = gitlab.project_id()
+        issue_args['milestone'] = gitlab.milestone_id_by_name(issue_args['milestone'])
+        issue_args['author'] = gitlab.get_user_id(usermap.get(issue_args['author'], default_user))
+        issue_args['assignee'] = gitlab.get_user_id(usermap.get(issue_args['assignee'], default_user))
+        # Create and save
+        gitlab_issue = gitlab.model.Issues(**issue_args)
+        db_issue = gitlab.create_issue(issue_args['project'], gitlab_issue)
+        LOG.debug('migrated ticket %s -> %s', ticket_id, db_issue.iid)
+        # Migrate whole changelog
+        for change in ticket['changelog']:
+            if change['type'] == 'comment':
+                note_args = change_kwargs(change)
+                # Fix references
+                note_args['project'] = issue_args['project']
+                note_args['author'] = gitlab.get_user_id(usermap.get(note_args['author'], default_user))
+                note_args['updated_by'] = gitlab.get_user_id(usermap.get(note_args['updated_by'], default_user))
+                db_note = gitlab.model.Notes(**note_args)
+                gitlab.comment_issue(gitlab.project_id(), db_issue, db_note, binary_attachment)
+                LOG.debug('migrated ticket #%s change -> %s', ticket_id, db_note.iid)
+
+
+def migrate_milestones(trac_milestones, gitlab):
+    for title, milestone in six.iteritems(trac_milestones):
+        gitlab_milestone = gitlab.model.Milestones(
+            project=gitlab.project_id(),
+            **milestone_kwargs(milestone)
+        )
+        db_milestone = gitlab.create_milestone(dest_project_id, new_milestone)
+        LOG.debug('migrated milestone %s -> %s', title, db_milestone.iid)
+
+
+def migrate_wiki(trac_wiki, gitlab, output_dir):
+    for title, wiki in six.iteritems(trac_wiki):
         page = wiki['page']
         attachments = wiki['attachments']
         author = wiki['attributes']['author']
@@ -150,11 +205,8 @@ def migrate_wiki(tracwiki, gitlab, output_dir):
         last_modified = wiki['attributes']['lastModified']
         if title == 'WikiStart':
             title = 'home'
-        
         converted_page = trac2down.convert(page, os.path.dirname('/wikis/%s' % title))
-        
         orphaned = []
-        
         for filename, attachment in six.iteritems(attachments):
             data = attachment['data']
             name = filename.split('/')[-1]
@@ -164,11 +216,13 @@ def migrate_wiki(tracwiki, gitlab, output_dir):
                                        r'migrated/%s)' % name)
             if '%s)' % name not in converted_page:
                 orphaned.append(name)
-
+            LOG.debug('migrated attachment %s @ %s', title, filename)
+        # Add orphaned attachments to page
         if orphaned:
             converted_page += '\n\n'
             converted_page += '##### During migration the following orphaned attachments have been found:\n'
             for f in orphaned:
                 converted_page += '- [%s](/uploads/migrated/%s)\n' % (f, f)
-        
+        # Writeout!
         trac2down.save_file(converted_page, title, version, last_modified, author, output_dir)
+        LOG.debug('migrated wiki page %s', title)
