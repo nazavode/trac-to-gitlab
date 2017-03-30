@@ -24,9 +24,9 @@ class Connection(object):
     """
 
     def __init__(self, model, db_name, db_user, db_password, db_path, uploads_path, project_name):
-        self.model = importlib.import_module(model)
+        self.model = model
         self.model.database_proxy.initialize(
-            peewee.PostgresqlDatabase(db_name, user=db_user, host=db_path)
+            peewee.PostgresqlDatabase(db_name, user=db_user, password=db_password, host=db_path)
         )
         self.uploads_path = uploads_path
         self.project_name = project_name
@@ -69,6 +69,18 @@ class Connection(object):
             print(project._data)
             return project._data
         return None
+    
+    def project_id_by_name(self, project_name):
+        project = self.project_by_name(project_name)
+        if not project:
+            raise ValueError("Project '%s' not found" % project_name)
+        return project["id"]
+    
+    def milestone_id_by_name(self, project_id, milestone_name):
+        milestone = self.milestone_by_name(project_id, milestone_name)
+        if not milestone:
+            raise ValueError("Milestone '%s' of project '%s' not found" % (milestone_name, project_id))
+        return milestone["id"]
 
     def get_user_id(self, username):
         return Users.get(Users.username == username).id

@@ -179,22 +179,34 @@ def users(ctx, trac_uri, ssl_verify):
 @trac_params
 @click.option(
     '--format',
-    type=click.Choice(['json', 'python', 'pickle']),
+    type=click.Choice(['json', 'python']),
     default='json',
     show_default=True,
     help='export format',
 )
+@click.option(
+    '--out-file',
+    metavar='<path>',
+    type=click.Path(writable=True),
+    help='Output file. If not specified, result will be written to stdout.'
+)
 @click.pass_context
-def export(ctx, trac_uri, ssl_verify, format):
+def export(ctx, trac_uri, ssl_verify, format, out_file):
     '''export a complete Trac instance'''
-    click.echo('Crawling and exporting Trac instance from {}'.format(sanitize_url(trac_uri)))
+    click.echo('Crawling Trac instance at {}'.format(sanitize_url(trac_uri)))
     with click_spinner.spinner():
         source = trac.connect(trac_uri, encoding='UTF-8', use_datetime=True,
                                 ssl_verify=ssl_verify)
         project = trac.project_get(source, collect_authors=True)
-        click.echo(str(project))
-
-
+        project = _dumps(project, format=format)
+    if out_file:
+        click.echo('Writing export to {}'.format(out_file))
+        with click_spinner.spinner():
+            with open(out_file, 'w') as f:
+                f.write(project)
+    else:
+        click.echo(project)
+        
 
 @cli.command()
 @click.option(
@@ -227,7 +239,7 @@ def migrate(ctx, usermap, usermap_file, fallback_user, trac_uri, ssl_verify,
     '''migrate a Trac instance'''
     umap = {}
     config_file = ctx.obj.get('config-file', None)
-    if config_file in ctx.obj:
+    if config_file:
         umap.update(toml.load(config_file)['usermap'])
     for mapfile in usermap_file:
         umap.update(toml.load(mapfile)['usermap'])

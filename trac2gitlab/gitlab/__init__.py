@@ -2,6 +2,8 @@
 
 import re
 
+import six
+
 from trac2gitlab import trac2down
 
 TICKET_PRIORITY_TO_ISSUE_LABEL = {
@@ -133,3 +135,40 @@ def milestone_kwargs(milestone):
         'state': 'closed' if milestone['completed'] else 'active',
         'due_date': milestone['due'],
     }
+
+
+################################################################################
+# Conversion API
+################################################################################
+
+def migrate_wiki(tracwiki, gitlab, output_dir):
+    for title, wiki in six.iteritems(tracwiki):
+        page = wiki['page']
+        attachments = wiki['attachments']
+        author = wiki['attributes']['author']
+        version = wiki['attributes']['version']
+        last_modified = wiki['attributes']['lastModified']
+        if title == 'WikiStart':
+            title = 'home'
+        
+        converted_page = trac2down.convert(page, os.path.dirname('/wikis/%s' % title))
+        
+        orphaned = []
+        
+        for filename, attachment in six.iteritems(attachments):
+            data = attachment['data']
+            name = filename.split('/')[-1]
+            gitlab.save_wiki_attachment(name, data)
+            converted_page = \
+                converted_page.replace(r'migrated/%s)' % filename,
+                                       r'migrated/%s)' % name)
+            if '%s)' % name not in converted_page:
+                orphaned.append(name)
+
+        if orphaned:
+            converted_page += '\n\n'
+            converted_page += '##### During migration the following orphaned attachments have been found:\n'
+            for f in orphaned:
+                converted_page += '- [%s](/uploads/migrated/%s)\n' % (f, f)
+        
+        trac2down.save_file(converted_page, title, version, last_modified, author, output_dir)
