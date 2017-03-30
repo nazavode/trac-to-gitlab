@@ -39,7 +39,9 @@ setup(
         'peewee',
         'psycopg2',
         'six',
-        'click'
+        'click',
+        'click_spinner',
+        'toml',
     ],
     entry_points={
         'console_scripts': [
